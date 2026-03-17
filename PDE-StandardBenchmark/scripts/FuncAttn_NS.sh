@@ -1,0 +1,15 @@
+python exp_ns.py \
+--gpu 0 \
+--model Functional_Attention_Structured_Mesh_2D \
+--n-hidden 256 \
+--n-layers 8 \
+--n-heads 8 \
+--lr 0.001 \
+--mlp_ratio 1 \
+--max_grad_norm 0.1 \
+--batch-size 2 \
+--basis_num 32 \
+--unified_pos 1 \
+--ref 8 \
+--eval 0 \
+--save_name NS \
