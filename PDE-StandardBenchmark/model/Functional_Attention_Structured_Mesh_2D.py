@@ -55,7 +55,7 @@ class FuncAttn_block(nn.Module):
         super().__init__()
         self.last_layer = last_layer
         self.ln_1 = nn.LayerNorm(hidden_dim)
-        self.Attn = FunctionalMap_Attention_Structured_Mesh_2D(hidden_dim, heads=num_heads, dim_head=hidden_dim // num_heads,
+        self.Attn = FunctionalMap_Attention_Structured_Mesh_2D(hidden_dim, num_heads=num_heads,
                                                          dropout=dropout, basis_num=basis_num, H=H, W=W)
 
         self.ln_2 = nn.LayerNorm(hidden_dim)

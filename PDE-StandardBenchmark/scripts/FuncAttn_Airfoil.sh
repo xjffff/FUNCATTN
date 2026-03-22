@@ -1,6 +1,6 @@
 python exp_airfoil.py \
 --gpu 0 \
---model Transformer_Structured_Mesh_2D_Shared \
+--model Functional_Attention_Structured_Mesh_2D_Shared \
 --n-hidden 128 \
 --n-layers 8 \
 --n-heads 8 \

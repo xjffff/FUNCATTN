@@ -53,7 +53,7 @@ class FuncAttn_block(nn.Module):
         super().__init__()
         self.last_layer = last_layer
         self.ln_1 = nn.LayerNorm(hidden_dim)
-        self.Attn = FunctionalMap_Attention_Irregular_Mesh_Shared(hidden_dim, heads=num_heads, dim_head=hidden_dim // num_heads,
+        self.Attn = FunctionalMap_Attention_Irregular_Mesh_Shared(hidden_dim, num_heads=num_heads,
                                                      dropout=dropout, basis_num=basis_num)
         self.ln_2 = nn.LayerNorm(hidden_dim)
         self.mlp = MLP(hidden_dim, hidden_dim * mlp_ratio, hidden_dim, n_layers=0, res=False, act=act)
@@ -62,13 +62,14 @@ class FuncAttn_block(nn.Module):
             self.mlp2 = nn.Linear(hidden_dim, out_dim)
 
     def forward(self, fx, slice_token, slice_weights):
-        fx = self.Attn(slice_token, slice_weights) + fx
+        res =fx
+        fx, inp, outp = self.Attn(slice_token, slice_weights)
+        fx =fx + res
         fx = self.mlp(self.ln_2(fx)) + fx
         if self.last_layer:
-            return self.mlp2(self.ln_3(fx))
+            return self.mlp2(self.ln_3(fx)), inp, outp
         else:
-            return fx
-
+            return fx, inp, outp
 
 class Model(nn.Module):
     def __init__(self,
@@ -147,6 +148,7 @@ class Model(nn.Module):
         return pos
 
     def forward(self, x, fx, T=None):
+        features = []
         if self.unified_pos:
             x = self.get_grid(x, x.shape[0])
         if fx is not None:
@@ -176,7 +178,9 @@ class Model(nn.Module):
             slice_token = torch.einsum("bhnc,bhng->bhgc", fx_mid, slice_weights)
             slice_token = slice_token / ((slice_norm + 1e-5)[:, :, :, None].repeat(1, 1, 1, self.dim_head))
 
-            fx = block(fx_og, slice_token, slice_weights)
+            fx, inp, outp = block(fx_og, slice_token, slice_weights)
+            features.append(inp)
+            features.append(outp)
 
 
         return fx

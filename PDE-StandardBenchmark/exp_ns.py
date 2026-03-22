@@ -35,7 +35,7 @@ parser.add_argument('--ref', type=int, default=8)
 parser.add_argument('--basis_num', type=int, default=32)
 parser.add_argument('--eval', type=int, default=0)
 parser.add_argument('--save_name', type=str, default='ns_2d_UniPDE')
-parser.add_argument('--data_path', type=str, default='/data/fno')
+parser.add_argument('--data_path', type=str, default='/home/stud/xjie/storage/user/Transolver/PDE-Solving-StandardBenchmark/dataset')
 args = parser.parse_args()
 
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
@@ -140,7 +140,7 @@ def main():
         project_name="Navier_Stokes",
         run_name=run_name,
         config=config,
-        tags=[args.attn_type, args.model],
+        tags=[args.model],
         enabled=not args.eval
     )
 
@@ -268,10 +268,10 @@ def main():
 
             logger.log({
                 'epoch': ep,
-                'train/step_loss': train_l2_step,
-                'train/full_loss': train_l2_full,
-                'test/step_loss': test_l2_step,
-                'test/full_loss': test_l2_full,
+                'train/step_loss': train_l2_step / ntrain / (T / step),
+                'train/full_loss': train_l2_full / ntrain,
+                'test/step_loss': test_l2_step / ntest / (T / step),
+                'test/full_loss': test_l2_full / ntest,
                 'lr': optimizer.param_groups[0]['lr'],
                 'epoch_time_sec': epoch_time,
                 'max_memory_MB': max_mem

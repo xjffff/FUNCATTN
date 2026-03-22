@@ -8,7 +8,7 @@ python exp_plas.py \
 --mlp_ratio 1 \
 --max_grad_norm 0.1 \
 --batch-size 8 \
---slice_num 64 \
+--basis_num 64 \
 --unified_pos 0 \
 --ref 8 \
 --eval 0 \

@@ -7,7 +7,7 @@ python exp_elas.py \
 --lr 0.001 \
 --mlp_ratio 2 \
 --batch-size 1 \
---slice_num 64 \
+--basis_num 64 \
 --unified_pos 0 \
 --ref 8 \
 --eval 0 \
