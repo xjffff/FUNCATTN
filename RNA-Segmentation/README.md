@@ -1,7 +1,5 @@
 # RNA Point Cloud Segmentation
 
-3D point cloud segmentation on 640 ribosomal RNA structures from the Protein Data Bank, with 260 functional categories. Each surface is represented as a sampled point cloud of 4096 points.
-
 This is adapted from [DiffusionNet](https://github.com/nmwsharp/diffusion-net)'s RNA mesh segmentation benchmark, modified to operate on point clouds rather than meshes.
 
 ---
