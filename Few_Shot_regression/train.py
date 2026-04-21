@@ -1,37 +1,44 @@
 from __future__ import annotations
-import argparse, os, random, json
+import argparse
+import json
+import os
+import random
 
-import torch
 import numpy as np
+import torch
 
 from trainer import TrainCfg, FewShotTrainer
 
 DEFAULT_CONFIGS = {
-    #"attention": dict(
-    #    batch_size=8, K=32, Q=200, lr=1e-3, ridge=1e-3, init_param=False,
-    #),
-    #"intention": dict(
-    #    batch_size=8, K=32, Q=200, lr=3e-4, ridge=1e-3, init_param=False,
-    #),
+    "attention": dict(
+        batch_size=8, K=32, Q=200, lr=1e-3, ridge=1e-3, init_param=False,
+    ),
+    "intention": dict(
+        batch_size=8, K=32, Q=200, lr=3e-4, ridge=1e-4, init_param=True,
+    ),
     "funcattn": dict(
         batch_size=8, K=32, Q=200, lr=1e-4, ridge=1e-4, init_param=True,
     ),
-    #"transolver": dict(
-    #    batch_size=8, K=32, Q=200, lr=1e-4, ridge=1e-3, init_param=False,
-    #),
-    #"linear_attention": dict(
-    #    batch_size=8, K=32, Q=200, lr=1e-4, ridge=1e-3, init_param=False,
-    #),
+    "transolver": dict(
+        batch_size=8, K=32, Q=200, lr=1e-4, ridge=1e-3, init_param=False,
+    ),
+    "linear_attention": dict(
+        batch_size=8, K=32, Q=200, lr=1e-4, ridge=1e-3, init_param=False,
+    ),
 }
 
 
-def train_one(name: str, iters: int, device: str, save_dir: str, print_every: int):
-    kw = DEFAULT_CONFIGS[name]
+def train_one(name: str, iters: int, device: str, save_dir: str, print_every: int,
+              K_override: int | None = None):
+    kw = dict(DEFAULT_CONFIGS[name])
+    if K_override is not None:
+        kw['K'] = K_override
+    K = kw['K']
     cfg = TrainCfg(model=name, iters=iters, device=device, **kw)
     trainer = FewShotTrainer(cfg)
 
     print(f"\n{'='*50}")
-    print(f"Training {name}  (iters={iters}, bs={cfg.batch_size}, K={cfg.K})")
+    print(f"Training {name}  (iters={iters}, bs={cfg.batch_size}, K={K})")
     print(f"{'='*50}")
 
     for it in range(1, iters + 1):
@@ -39,12 +46,10 @@ def train_one(name: str, iters: int, device: str, save_dir: str, print_every: in
         if it % print_every == 0:
             print(f"  [{name} {it:05d}/{iters}] MSE: {loss:.5f}")
 
-    # --- eval ---
     eval_results = trainer.eval_mse()
     print(f"  Eval MSE: {eval_results}")
 
-    # --- save ---
-    ckpt_path = os.path.join(save_dir, f"{name}.pth")
+    ckpt_path = os.path.join(save_dir, f"{name}_k{K}.pth")
     torch.save(trainer.model.state_dict(), ckpt_path)
     print(f"  Saved -> {ckpt_path}")
 
@@ -60,9 +65,10 @@ def main():
     parser.add_argument("--print_every", type=int, default=1000)
     parser.add_argument("--save_dir", type=str, default="checkpoints")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--K", type=int, default=None,
+                        help="Override training K for all models (default: per-model default)")
     args = parser.parse_args()
 
-    # reproducibility
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -76,10 +82,10 @@ def main():
     for name in args.models:
         eval_res, losses = train_one(
             name, args.iters, device, args.save_dir, args.print_every,
+            K_override=args.K,
         )
         all_results[name] = eval_res
 
-    # save a summary json alongside checkpoints
     summary_path = os.path.join(args.save_dir, "eval_summary.json")
     with open(summary_path, "w") as f:
         json.dump(all_results, f, indent=2)

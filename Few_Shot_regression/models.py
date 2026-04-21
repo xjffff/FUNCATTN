@@ -1,5 +1,4 @@
 from __future__ import annotations
-from typing import Dict, Tuple, Optional
 import math
 
 import torch
@@ -21,13 +20,15 @@ class MLP(nn.Module):
         return self.net(x)
 
 
-# Intention
-
-class IntentionHead(nn.Module):
-    def __init__(self, x_dim=1, y_dim=1, latent_dim=1000, ridge=1e-3,
+class Intention(nn.Module):
+    def __init__(self, x_dim=1, y_dim=1, latent_dim=1000, num_heads=4, ridge=1e-3,
                  shared_encoder=True, init_param=False):
         super().__init__()
+        assert latent_dim % num_heads == 0, "latent_dim must be divisible by num_heads"
         self.ridge = ridge
+        self.num_heads = num_heads
+        self.dim_head = latent_dim // num_heads
+        self.y_dim = y_dim
 
         def enc_block(in_d, out_d):
             return nn.Sequential(
@@ -38,40 +39,41 @@ class IntentionHead(nn.Module):
             )
 
         if shared_encoder:
-            self.enc_v = enc_block(x_dim, latent_dim)
-            self.enc_k = self.enc_v
-            self.enc_q = self.enc_v
+            self.enc_k = enc_block(x_dim, latent_dim)
+            self.enc_q = self.enc_k
         else:
             self.enc_k = enc_block(x_dim, latent_dim)
             self.enc_q = enc_block(x_dim, latent_dim)
 
-        self.y_dim = y_dim
-
         if init_param:
             for m in self.modules():
                 if isinstance(m, nn.Linear):
-                    nn.init.normal_(m.weight, 0.0, 0.01)
+                    nn.init.normal_(m.weight, 0.0, 0.02)
                     nn.init.zeros_(m.bias)
 
     def forward(self, xc, yc, xq):
         B, N, _ = xc.shape
+        Nq = xq.shape[1]
+        H, Dh = self.num_heads, self.dim_head
+
         K = self.enc_k(xc)
-        Q = self.enc_k(xq)
-        V = yc
+        Q = self.enc_q(xq)
+
+        K = K.view(B, N,  H, Dh).permute(0, 2, 1, 3).reshape(B * H, N,  Dh)
+        Q = Q.view(B, Nq, H, Dh).permute(0, 2, 1, 3).reshape(B * H, Nq, Dh)
+        V = yc.unsqueeze(1).expand(B, H, N, self.y_dim).reshape(B * H, N, self.y_dim)
 
         Kt = K.transpose(1, 2)
         KKT = torch.bmm(K, Kt)
-        I_N = torch.eye(N, device=K.device).unsqueeze(0).expand(B, N, N)
+        I_N = torch.eye(N, device=K.device).unsqueeze(0).expand(B * H, N, N)
         reg = KKT + (self.ridge + 1e-5) * I_N
         alpha = torch.linalg.solve(reg, V)
-        QKt = torch.bmm(Q, Kt)
-        y_hat = torch.bmm(QKt, alpha)
-        return y_hat
+        y_hat = torch.bmm(torch.bmm(Q, Kt), alpha)
+
+        return y_hat.view(B, H, Nq, self.y_dim).sum(dim=1)
 
 
-# Attention: standard multi-head cross-attention
-
-class AttentionHead(nn.Module):
+class Attention(nn.Module):
     def __init__(self, d_model=128, num_heads=8, init_param=False):
         super().__init__()
         self.enc_k = MLP([1, d_model, d_model, d_model])
@@ -93,9 +95,7 @@ class AttentionHead(nn.Module):
         return self.dec(H)
 
 
-# Linear Attention
-
-class LinearAttentionHead(nn.Module):
+class LinearAttention(nn.Module):
     def __init__(self, d_model=128, num_heads=8, init_param=False):
         super().__init__()
         self.enc_k = MLP([1, d_model, d_model, d_model])
@@ -120,23 +120,18 @@ class LinearAttentionHead(nn.Module):
         return self.dec(H)
 
 
-# FuncAttn
-
 class FuncAttn(nn.Module):
     def __init__(self, latent_dim=256, num_heads=8,
                  num_groups=64, ridge=1e-4, init_param=False):
         super().__init__()
         assert latent_dim % num_heads == 0
+        self.ridge = ridge
         self.dim_head = latent_dim // num_heads
         self.heads = num_heads
-        self.temperature = nn.Parameter(torch.ones([1, 1, 1]) * 0.5)
         self.freq_keep = num_groups
-
-        self.in_project_q = nn.Linear(latent_dim, latent_dim)
-        self.in_project_kv = self.in_project_q
-
-        self.slice = nn.Linear(latent_dim, self.freq_keep)
-        torch.nn.init.orthogonal_(self.slice.weight)
+        self.temperature = nn.Parameter(torch.ones([1, 1, 1]) * 0.5)
+        self.slice = nn.Linear(latent_dim, num_groups)
+        nn.init.orthogonal_(self.slice.weight)
 
         def make_encoder(in_d, out_d):
             return nn.Sequential(
@@ -155,7 +150,6 @@ class FuncAttn(nn.Module):
                 if isinstance(m, nn.Linear):
                     nn.init.normal_(m.weight, 0.0, 0.01)
                     nn.init.zeros_(m.bias)
-        self.ridge = ridge
 
     def _slice(self, x_mid):
         B, N, Dh = x_mid.shape
@@ -166,45 +160,32 @@ class FuncAttn(nn.Module):
         slice_tokens = slice_tokens / ((slice_norm + 1e-5)[:, :, None].repeat(1, 1, Dh))
         return slice_weights, slice_tokens
 
-    def forward(self, xc, yc, x_q):
-        B, Nq, C = x_q.shape
-        x_q = self.to_q(x_q)
+    def forward(self, xc, yc, xq):
+        xq = self.to_q(xq)
         xc = self.to_k(xc)
 
         slice_w, slice_token = self._slice(xc)
-
-        q = x_q
-        k = slice_token
         v = torch.einsum("bnc,bng->bgc", yc, slice_w)
 
-        kH = k.transpose(1, 2)
-        kkH = torch.bmm(k, kH)
-        I = torch.eye(kkH.shape[1], device=q.device, dtype=q.dtype).unsqueeze(0)
+        kH = slice_token.transpose(1, 2)
+        kkH = torch.bmm(slice_token, kH)
+        I = torch.eye(kkH.shape[1], device=xq.device, dtype=xq.dtype).unsqueeze(0)
         reg = (1 - self.ridge) * kkH + self.ridge * I
 
-        qkH = torch.bmm(q, kH)
-        C_mat = torch.linalg.solve(reg, qkH, left=False)
-        out_slice = torch.bmm(C_mat, v)
-        return out_slice
+        C_mat = torch.linalg.solve(reg, torch.bmm(xq, kH), left=False)
+        return torch.bmm(C_mat, v)
 
-
-# Transolver
 
 class Transolver(nn.Module):
-    def __init__(self, latent_dim=256, learnable_ridge=True, num_heads=8,
-                 dropout=0., num_groups=64, init_param=False):
+    def __init__(self, latent_dim=256, num_heads=8, num_groups=64, init_param=False):
         super().__init__()
         assert latent_dim % num_heads == 0
         self.dim_head = latent_dim // num_heads
         self.heads = num_heads
-        self.temperature = nn.Parameter(torch.ones([1, 1, 1]) * 0.5)
         self.freq_keep = num_groups
-
-        self.in_project_q = nn.Linear(latent_dim, latent_dim)
-        self.in_project_kv = self.in_project_q
-
+        self.temperature = nn.Parameter(torch.ones([1, 1, 1]) * 0.5)
         self.slice = nn.Linear(latent_dim, num_groups)
-        torch.nn.init.orthogonal_(self.slice.weight)
+        nn.init.orthogonal_(self.slice.weight)
 
         def make_encoder(in_d, out_d):
             return nn.Sequential(
@@ -233,19 +214,13 @@ class Transolver(nn.Module):
         slice_tokens = slice_tokens / ((slice_norm + 1e-5)[:, :, None].repeat(1, 1, Dh))
         return slice_weights, slice_tokens
 
-    def forward(self, xc, yc, x_q):
-        B, Nq, C = x_q.shape
-        x_q = self.to_q(x_q)
+    def forward(self, xc, yc, xq):
+        xq = self.to_q(xq)
         xc = self.to_k(xc)
 
         slice_w, slice_token = self._slice(xc)
-
-        q = x_q
-        k = slice_token
         v = torch.einsum("bnc,bng->bgc", yc, slice_w)
 
-        scores = torch.bmm(q, k.transpose(1, 2))
-        scores = scores / math.sqrt(self.dim_head)
+        scores = torch.bmm(xq, slice_token.transpose(1, 2)) / math.sqrt(self.dim_head)
         attn_weights = F.softmax(scores, dim=-1)
-        out_slice = torch.bmm(attn_weights, v)
-        return out_slice
+        return torch.bmm(attn_weights, v)

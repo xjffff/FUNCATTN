@@ -7,3 +7,4 @@ data/
 *.pth
 .idea/
 .vscode/
+*.pkl

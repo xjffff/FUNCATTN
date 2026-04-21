@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 from data import SineCfg, EpisodeSampler
 from models import (
-    IntentionHead, AttentionHead, LinearAttentionHead,
+    Intention, Attention, LinearAttention,
     FuncAttn, Transolver,
 )
 
@@ -25,16 +25,16 @@ class TrainCfg:
 
 
 MODEL_BUILDERS = {
-    "intention": lambda cfg: IntentionHead(
-        latent_dim=128, ridge=cfg.ridge, init_param=cfg.init_param,
+    "intention": lambda cfg: Intention(
+        latent_dim=1000, ridge=cfg.ridge, init_param=cfg.init_param,
     ),
-    "attention": lambda cfg: AttentionHead(
+    "attention": lambda cfg: Attention(
         d_model=256, num_heads=4, init_param=cfg.init_param,
     ),
     "funcattn": lambda cfg: FuncAttn(
         latent_dim=128, ridge=cfg.ridge, num_groups=8, init_param=cfg.init_param,
     ),
-    "linear_attention": lambda cfg: LinearAttentionHead(
+    "linear_attention": lambda cfg: LinearAttention(
         d_model=128, num_heads=8, init_param=cfg.init_param,
     ),
     "transolver": lambda cfg: Transolver(
@@ -57,7 +57,6 @@ class FewShotTrainer:
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.opt, T_max=cfg.iters,
         )
-        self.scheduler = None
         self.sampler = EpisodeSampler(SineCfg(), K=cfg.K, Q=cfg.Q)
         self.losses: list[float] = []
 

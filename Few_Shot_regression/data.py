@@ -1,7 +1,8 @@
 from __future__ import annotations
 from typing import Tuple
 from dataclasses import dataclass
-import math, random
+import math
+import random
 
 import torch
 
