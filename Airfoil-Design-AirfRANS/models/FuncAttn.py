@@ -41,7 +41,6 @@ class FunctionalMap_Attention(nn.Module):
         # B N C
         B, N, C = x.shape
 
-        ### (1) Slice
         fx_mid = self.in_project_fx(x).reshape(B, N, self.heads, self.dim_head) \
             .permute(0, 2, 1, 3).contiguous()  # B H N C
         x_mid = self.in_project_x(x).reshape(B, N, self.heads, self.dim_head) \
@@ -52,7 +51,6 @@ class FunctionalMap_Attention(nn.Module):
         slice_token = torch.einsum("bhnc,bhng->bhgc", fx_mid, slice_weights)
         slice_token = slice_token / ((slice_norm + 1e-5)[:, :, :, None].repeat(1, 1, 1, self.dim_head))
 
-        ### (2) Attention among slice tokens
         q_slice_token = self.to_q(slice_token)
         k_slice_token = self.to_k(slice_token)
         v_slice_token = self.to_v(slice_token)
@@ -65,7 +63,6 @@ class FunctionalMap_Attention(nn.Module):
         C = torch.matmul(q_slice_token, Z)                               # [B, H, G, G]
         out_slice_token = torch.matmul(C, v_slice_token)
 
-        ### (3) Deslice
         out_x = torch.einsum("bhgc,bhng->bhnc", out_slice_token, slice_weights)
         out_x = rearrange(out_x, 'b h n d -> b n (h d)')
         return self.to_out(out_x)

@@ -1,0 +1,17 @@
+torch
+numpy
+scipy
+matplotlib
+tqdm
+einops
+seaborn
+wandb
+PyYAML
+scikit-learn
+timm
+torch-geometric
+trimesh
+pyvista
+potpourri3d
+robust-laplacian
+diffusion-net
