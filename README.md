@@ -1,5 +1,7 @@
 # Functional Attention: From Pairwise Affinities to Functional Correspondences
 
+Welcome to the official implementation of the paper [Functional Attention: From Pairwise Affinities to Functional Correspondences (ICML 2026)](https://arxiv.org/pdf/2605.31559). You can find the project page [here](https://xjffff.github.io/funcattn/).
+
 > **Accepted at ICML 2026.**
 
 We introduce **Functional Attention (FuncAttn)**, which reinterprets attention as a *functional correspondence* between adaptive bases rather than pairwise affinities between tokens. Inspired by the functional maps framework, FuncAttn replaces the dense softmax score matrix with a compact linear operator learned via optimal least-squares in a spectral space, reducing complexity from O(n²) to O(k²) with k ≪ n.
@@ -56,3 +58,19 @@ We appreciate the following GitHub repos for their valuable code base and datase
 2. https://github.com/thuml/Transolver
 3. https://github.com/Extrality/AirfRANS
 4. https://github.com/nmwsharp/diffusion-net
+
+   
+## Citation
+If you find our work useful in your research, please consider citing:
+
+```bibtex
+@misc{xiao2026functionalattentionpairwiseaffinities,
+      title={Functional Attention: From Pairwise Affinities to Functional Correspondences}, 
+      author={Jiefang Xiao and Maolin Gao and Simon Weber and Guandao Yang and Daniel Cremers},
+      year={2026},
+      eprint={2605.31559},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2605.31559}, 
+}
+```
